@@ -1,0 +1,63 @@
+name: Deploy K3S Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (dev, stage, prod)' 
+        required: true
+        default: 'dev'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      ENV: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+        
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible
+
+    - name: Clone External Repository
+      run: |
+        git clone https://github.com/username/repo.git
+        cp repo/hosts_$ENV ./hosts
+
+    - name: Check if Kubernetes is installed
+      id: check_installed
+      run: |
+        if ansible all -i hosts -m shell -a "which k3s" ; then
+          echo "::set-output name=installed::true"
+        else
+          echo "::set-output name=installed::false"
+        fi
+
+    - name: Check if Kubernetes service is running
+      id: check_running
+      run: |
+        if ansible all -i hosts -m shell -a "systemctl is-active --quiet k3s" ; then
+          echo "::set-output name=running::true"
+        else
+          echo "::set-output name=running::false"
+        fi
+      if: steps.check_installed.outputs.installed == 'true'
+
+    - name: Get Kubernetes service logs
+      run: |
+        ansible all -i hosts -m shell -a "journalctl -u k3s --no-pager"
+      if: steps.check_installed.outputs.installed == 'true' && steps.check_running.outputs.running == 'false'
+
+    - name: Run Ansible Playbook
+      run: |
+        ansible-playbook -i hosts_$ENV k3s_install.yml
+      if: steps.check_installed.outputs.installed == 'false'

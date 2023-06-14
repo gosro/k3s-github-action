@@ -1,0 +1,28 @@
+---
+- hosts: all
+  remote_user: ubuntu
+  tasks:
+    - name: Disable firewalld
+      become: yes
+      ansible.builtin.systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+
+- hosts: master
+  remote_user: ubuntu
+  tasks:
+    - name: Install k3s server
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+    - name: Get Node Token
+      shell: cat /var/lib/rancher/k3s/server/node-token
+      register: node_token
+      changed_when: False
+
+- hosts: workers
+  remote_user: ubuntu
+  tasks:
+    - name: Install k3s agent
+      shell: |
+        curl -sfL https://get.k3s.io | K3S_URL=https://<master_node_IP>:6443 K3S_TOKEN={{ hostvars[groups['master'][0]].node_token.stdout }} sh -
