@@ -9,6 +9,53 @@
         state: stopped
         enabled: no
 
+    - name: Install dependencies
+      become: yes
+      apt:
+        name:
+          - curl
+          - jq
+        state: present
+
+    - name: Download latest runner package
+      get_url:
+        url: https://github.com/actions/runner/releases/download/v2.278.0/actions-runner-linux-x64-2.278.0.tar.gz
+        dest: "/tmp/actions-runner.tar.gz"
+        mode: '0755'
+      
+    - name: Create actions runner directory
+      file:
+        path: "/home/runner"
+        state: directory
+
+    - name: Extract runner package
+      unarchive:
+        src: "/tmp/actions-runner.tar.gz"
+        dest: "/home/runner"
+        remote_src: yes
+
+    - name: Install runner dependencies
+      become: yes
+      command: ./bin/installdependencies.sh
+      args:
+        chdir: /home/runner
+
+    - name: Configure runner
+      command: |
+        ./config.sh --url https://github.com/<your_username>/<your_repo> --token <your_token>
+      args:
+        chdir: /home/runner
+
+    - name: Install runner service
+      command: sudo ./svc.sh install
+      args:
+        chdir: /home/runner
+
+    - name: Start runner service
+      command: sudo ./svc.sh start
+      args:
+        chdir: /home/runner
+
 - hosts: master
   remote_user: ubuntu
   tasks:
